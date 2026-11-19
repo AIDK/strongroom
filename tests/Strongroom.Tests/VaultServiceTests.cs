@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using Strongroom.Core;
 using Strongroom.Core.Crypto;
@@ -7,7 +8,13 @@ namespace Strongroom.Tests;
 
 public sealed class VaultServiceTests : IDisposable
 {
-    private const string GoodPassword = "a-long-master-password";
+    // Test passwords are generated at runtime so no password-like literals live in the source
+    // (and secret scanners have nothing to flag). 24 characters, so they always pass the length rule.
+    private static string RandomPassword() => "pw-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(12));
+
+    private static readonly string GoodPassword = RandomPassword();
+    private static readonly string SamplePassword = RandomPassword();
+
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "strongroom-tests-" + Guid.NewGuid());
     private readonly string _db;
     private readonly VaultStore _store;
@@ -27,10 +34,10 @@ public sealed class VaultServiceTests : IDisposable
     }
 
     private static CredentialData Sample(string name = "Sage One") =>
-        new(name, "https://sage.example", "andries", "S3cret!pw", "Work apps", "notes here");
+        new(name, "https://sage.example", "andries", SamplePassword, "Work apps", "notes here");
 
-    private UnlockedVault Login(string user = "andries", string password = GoodPassword) =>
-        _service.Unlock(user, password) ?? throw new Exception("login failed");
+    private UnlockedVault Login(string user = "andries", string? password = null) =>
+        _service.Unlock(user, password ?? GoodPassword) ?? throw new Exception("login failed");
 
     [Fact]
     public void Register_validates_input()
@@ -48,7 +55,7 @@ public sealed class VaultServiceTests : IDisposable
 
         using var ok = _service.Unlock("andries", GoodPassword);
         Assert.NotNull(ok);
-        Assert.Null(_service.Unlock("andries", "the-wrong-password"));
+        Assert.Null(_service.Unlock("andries", RandomPassword()));
         Assert.Null(_service.Unlock("nobody", GoodPassword));
         Assert.NotNull(_service.Unlock("ANDRIES", GoodPassword)); // usernames are case-insensitive
     }
@@ -64,7 +71,7 @@ public sealed class VaultServiceTests : IDisposable
 
         Assert.Equal(added.Id, listed.Id);
         Assert.Equal("Sage One", listed.Name);
-        Assert.Equal("S3cret!pw", listed.Password);
+        Assert.Equal(SamplePassword, listed.Password);
         Assert.Equal("notes here", listed.Notes);
     }
 
@@ -75,7 +82,7 @@ public sealed class VaultServiceTests : IDisposable
         using (var first = Login()) first.Add(Sample());
 
         using var second = Login();
-        Assert.Equal("S3cret!pw", Assert.Single(second.List()).Password);
+        Assert.Equal(SamplePassword, Assert.Single(second.List()).Password);
     }
 
     [Fact]
@@ -85,9 +92,10 @@ public sealed class VaultServiceTests : IDisposable
         using var vault = Login();
         var id = vault.Add(Sample()).Id;
 
-        var updated = vault.Update(id, Sample("Sage Renamed") with { Password = "new-pw" });
+        var replacement = RandomPassword();
+        var updated = vault.Update(id, Sample("Sage Renamed") with { Password = replacement });
         Assert.Equal("Sage Renamed", updated!.Name);
-        Assert.Equal("new-pw", Assert.Single(vault.List()).Password);
+        Assert.Equal(replacement, Assert.Single(vault.List()).Password);
 
         Assert.Null(vault.Update(Guid.NewGuid(), Sample()));
         Assert.True(vault.Delete(id));
@@ -98,10 +106,11 @@ public sealed class VaultServiceTests : IDisposable
     [Fact]
     public void Users_cannot_see_or_change_each_others_credentials()
     {
+        var bobsMasterPassword = RandomPassword();
         _service.Register("alice", GoodPassword);
-        _service.Register("bob", "bobs-own-long-password");
+        _service.Register("bob", bobsMasterPassword);
         using var alice = Login("alice");
-        using var bob = Login("bob", "bobs-own-long-password");
+        using var bob = Login("bob", bobsMasterPassword);
 
         var alicesId = alice.Add(Sample("Alice only")).Id;
 
@@ -114,15 +123,16 @@ public sealed class VaultServiceTests : IDisposable
     [Fact]
     public void Database_contains_no_plaintext()
     {
+        var uniqueSecret = RandomPassword();
         _service.Register("andries", GoodPassword);
-        using (var vault = Login()) vault.Add(Sample("UniqueTitleXyz") with { Password = "UniquePasswordXyz" });
+        using (var vault = Login()) vault.Add(Sample("UniqueTitleXyz") with { Password = uniqueSecret });
 
         SqliteConnection.ClearAllPools();
         var bytes = File.ReadAllBytes(_db);
         var text = System.Text.Encoding.Latin1.GetString(bytes);
 
         Assert.DoesNotContain("UniqueTitleXyz", text);
-        Assert.DoesNotContain("UniquePasswordXyz", text);
+        Assert.DoesNotContain(uniqueSecret, text);
         Assert.DoesNotContain("sage.example", text);
         Assert.DoesNotContain(GoodPassword, text);
     }
@@ -142,7 +152,7 @@ public sealed class VaultServiceTests : IDisposable
         var rowB = rows.Single(r => r.Id != a.Id);
         _store.UpdateCredential(user.Id, rowB with { Blob = rowA.Blob });
 
-        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => vault.List());
+        Assert.ThrowsAny<CryptographicException>(() => vault.List());
     }
 
     [Fact]
@@ -152,12 +162,12 @@ public sealed class VaultServiceTests : IDisposable
         using var vault = Login();
         vault.Add(Sample());
 
-        const string NewPassword = "a-brand-new-master-password";
-        Assert.Equal(ChangePasswordResult.Changed, _service.ChangeMasterPassword(vault, GoodPassword, NewPassword));
+        var replacementMaster = RandomPassword();
+        Assert.Equal(ChangePasswordResult.Changed, _service.ChangeMasterPassword(vault, GoodPassword, replacementMaster));
 
         Assert.Null(_service.Unlock("andries", GoodPassword));
-        using var again = Login(password: NewPassword);
-        Assert.Equal("S3cret!pw", Assert.Single(again.List()).Password);
+        using var again = Login(password: replacementMaster);
+        Assert.Equal(SamplePassword, Assert.Single(again.List()).Password);
     }
 
     [Fact]
@@ -169,7 +179,7 @@ public sealed class VaultServiceTests : IDisposable
         var before = _store.FindUser("andries")!;
         var blobBefore = _store.ListCredentials(before.Id).Single().Blob;
 
-        _service.ChangeMasterPassword(vault, GoodPassword, "a-brand-new-master-password");
+        _service.ChangeMasterPassword(vault, GoodPassword, RandomPassword());
 
         var after = _store.FindUser("andries")!;
         Assert.NotEqual(before.Salt, after.Salt);
@@ -183,7 +193,7 @@ public sealed class VaultServiceTests : IDisposable
         _service.Register("andries", GoodPassword);
         using var vault = Login();
 
-        Assert.Equal(ChangePasswordResult.WrongCurrentPassword, _service.ChangeMasterPassword(vault, "not-my-password", "a-brand-new-master-password"));
+        Assert.Equal(ChangePasswordResult.WrongCurrentPassword, _service.ChangeMasterPassword(vault, RandomPassword(), RandomPassword()));
         Assert.Equal(ChangePasswordResult.WeakPassword, _service.ChangeMasterPassword(vault, GoodPassword, "short"));
         Assert.Equal(ChangePasswordResult.SameAsCurrent, _service.ChangeMasterPassword(vault, GoodPassword, GoodPassword));
 
