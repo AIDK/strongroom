@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Strongroom.Core/Strongroom.Core.csproj" />
+    <Project Path="src/Strongroom.Web/Strongroom.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Strongroom.Tests/Strongroom.Tests.csproj" />
+  </Folder>
+</Solution>

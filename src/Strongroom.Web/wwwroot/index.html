@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strongroom</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236366f1'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='white' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='2' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <!-- ===== Login ===== -->
+  <main id="login" class="login">
+    <form class="card login-card" id="loginForm" autocomplete="off">
+      <div class="logo big">
+        <svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="16" cy="16" r="2.5" fill="currentColor"/><path d="M16 7v3M16 22v3M7 16h3M22 16h3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </div>
+      <h1>Strongroom</h1>
+      <p class="muted" id="loginSubtitle">Enter your master password to unlock your vault.</p>
+
+      <label class="field">
+        <span>Username</span>
+        <input id="loginUser" autocomplete="username" required autofocus>
+      </label>
+      <label class="field">
+        <span>Master password</span>
+        <div class="input-row">
+          <input id="masterPassword" type="password" placeholder="••••••••••••" autocomplete="current-password" required>
+          <button type="button" class="icon-btn" data-toggle="masterPassword" title="Show / hide">👁</button>
+        </div>
+      </label>
+      <label class="field" id="confirmField" hidden>
+        <span>Confirm master password</span>
+        <input id="confirmPassword" type="password" autocomplete="new-password">
+        <span class="tiny muted">At least 12 characters. If you forget it, your vault cannot be recovered.</span>
+      </label>
+      <p class="error" id="loginError" hidden></p>
+      <button class="btn primary wide" type="submit" id="loginSubmit">Unlock</button>
+      <button class="btn ghost wide" type="button" id="modeToggle">Create a new account</button>
+      <p class="tiny muted">Your vault is encrypted with a key derived from your master password. Strongroom never stores the password itself.</p>
+    </form>
+  </main>
+
+  <!-- ===== App ===== -->
+  <div id="app" class="app" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="logo"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="16" cy="16" r="2.5" fill="currentColor"/></svg></span>
+        <strong>Strongroom</strong>
+      </div>
+      <nav id="categoryNav" class="nav"></nav>
+      <div class="sidebar-foot">
+        <button class="btn ghost wide" id="themeBtn">🌓 Theme</button>
+        <button class="btn ghost wide" id="changePwBtn">🔑 Master password</button>
+        <button class="btn ghost wide" id="lockBtn">🔒 Lock vault</button>
+      </div>
+    </aside>
+
+    <section class="main">
+      <header class="topbar">
+        <div class="search">
+          <span aria-hidden="true">🔍</span>
+          <input id="search" type="search" placeholder="Search by name, username or URL…">
+        </div>
+        <button class="btn primary" id="addBtn">＋ Add credential</button>
+      </header>
+
+      <div class="content">
+        <div class="list-head">
+          <h2 id="listTitle">All items</h2>
+          <span class="muted" id="listCount"></span>
+        </div>
+        <ul class="items" id="items"></ul>
+        <div class="empty" id="empty" hidden>
+          <div class="empty-icon">🗝️</div>
+          <h3>Nothing here yet</h3>
+          <p class="muted">Add your first credential to get started.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detail panel -->
+    <aside class="detail" id="detail" hidden></aside>
+  </div>
+
+  <!-- ===== Add / edit dialog ===== -->
+  <dialog id="editDialog">
+    <form method="dialog" class="card dialog-card" id="editForm">
+      <h2 id="dialogTitle">Add credential</h2>
+      <label class="field"><span>Name</span><input id="fName" required placeholder="e.g. Sage One"></label>
+      <label class="field"><span>Website / app URL</span><input id="fUrl" placeholder="https://"></label>
+      <div class="two">
+        <label class="field"><span>Username</span><input id="fUser" placeholder="you@company.com"></label>
+        <label class="field"><span>Category</span>
+          <select id="fCategory"><option>Work apps</option><option>Servers</option><option>Email</option><option>Other</option></select>
+        </label>
+      </div>
+      <label class="field">
+        <span>Password</span>
+        <div class="input-row">
+          <input id="fPass" type="password" placeholder="Password">
+          <button type="button" class="icon-btn" data-toggle="fPass" title="Show / hide">👁</button>
+          <button type="button" class="btn small" id="genBtn">Generate</button>
+        </div>
+        <div class="strength"><div id="strengthBar"></div></div>
+        <span class="tiny muted" id="strengthText"></span>
+      </label>
+      <label class="field"><span>Notes</span><textarea id="fNotes" rows="3" placeholder="Optional"></textarea></label>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" id="deleteBtn">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Change master password dialog ===== -->
+  <dialog id="pwDialog">
+    <form class="card dialog-card" id="pwForm" autocomplete="off">
+      <h2>Change master password</h2>
+      <p class="muted tiny">Your credentials stay as they are; only the key protecting them is re-wrapped. Any other open sessions will be locked.</p>
+      <label class="field"><span>Current master password</span>
+        <input id="pwCurrent" type="password" autocomplete="current-password" required></label>
+      <label class="field"><span>New master password</span>
+        <input id="pwNew" type="password" autocomplete="new-password" required minlength="12">
+        <span class="tiny muted">At least 12 characters. If you forget it, your vault cannot be recovered.</span></label>
+      <label class="field"><span>Confirm new master password</span>
+        <input id="pwConfirm" type="password" autocomplete="new-password" required></label>
+      <p class="error" id="pwError" hidden></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="pwCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="pwSubmit">Change password</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script src="js/app.js"></script>
+</body>
+</html>
