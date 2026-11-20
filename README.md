@@ -4,8 +4,11 @@ A small, local-only password manager for keeping work credentials. It runs on yo
 `http://localhost:5245` (or `:47245` when installed as a service), stores everything encrypted in a SQLite file, and supports more than one user,
 each with their own master password and vault.
 
-> **Status:** Phase 1 (capture, edit, delete, search, change master password) is done.
-> Phase 2 (backup to SharePoint) is on hold. This project has not had an independent security review.
+> **Status:** the core features (capture, edit, delete, search, change master password) are done.
+> This project has not had an independent security review.
+>
+> For how the pieces fit together (web app, Windows Service, deployment), see the
+> [project overview](docs/PROJECT-OVERVIEW.md).
 
 ## Run it
 
